@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>電卓</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+      font-family: sans-serif;
+    }
+
+    .calculator {
+      background-color: #333;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .display {
+      background-color: #1a1a1a;
+      color: #fff;
+      text-align: right;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      min-height: 64px;
+    }
+
+    .display .expression {
+      font-size: 14px;
+      color: #aaa;
+      min-height: 20px;
+    }
+
+    .display .result {
+      font-size: 36px;
+      word-break: break-all;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    button {
+      padding: 18px;
+      font-size: 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.1s;
+    }
+
+    button:active {
+      opacity: 0.7;
+    }
+
+    .btn-number {
+      background-color: #555;
+      color: #fff;
+    }
+
+    .btn-operator {
+      background-color: #f0a500;
+      color: #fff;
+    }
+
+    .btn-clear {
+      background-color: #e04040;
+      color: #fff;
+    }
+
+    .btn-equal {
+      background-color: #4caf50;
+      color: #fff;
+    }
+
+    .btn-zero {
+      grid-column: span 2;
+    }
+  </style>
+</head>
+<body>
+  <div class="calculator">
+    <div class="display">
+      <div class="expression" id="expression"></div>
+      <div class="result" id="result">0</div>
+    </div>
+    <div class="buttons">
+      <button class="btn-clear" onclick="clearAll()">C</button>
+      <button class="btn-operator" onclick="toggleSign()">+/-</button>
+      <button class="btn-operator" onclick="inputOperator('%')">%</button>
+      <button class="btn-operator" onclick="inputOperator('/')">÷</button>
+
+      <button class="btn-number" onclick="inputNumber('7')">7</button>
+      <button class="btn-number" onclick="inputNumber('8')">8</button>
+      <button class="btn-number" onclick="inputNumber('9')">9</button>
+      <button class="btn-operator" onclick="inputOperator('*')">×</button>
+
+      <button class="btn-number" onclick="inputNumber('4')">4</button>
+      <button class="btn-number" onclick="inputNumber('5')">5</button>
+      <button class="btn-number" onclick="inputNumber('6')">6</button>
+      <button class="btn-operator" onclick="inputOperator('-')">−</button>
+
+      <button class="btn-number" onclick="inputNumber('1')">1</button>
+      <button class="btn-number" onclick="inputNumber('2')">2</button>
+      <button class="btn-number" onclick="inputNumber('3')">3</button>
+      <button class="btn-operator" onclick="inputOperator('+')">+</button>
+
+      <button class="btn-number btn-zero" onclick="inputNumber('0')">0</button>
+      <button class="btn-number" onclick="inputDot()">.</button>
+      <button class="btn-equal" onclick="calculate()">=</button>
+    </div>
+  </div>
+
+  <script>
+    let current = '0';
+    let previous = '';
+    let operator = null;
+    let resetNext = false;
+
+    function updateDisplay() {
+      document.getElementById('result').textContent = current;
+      document.getElementById('expression').textContent =
+        operator ? `${previous} ${operatorSymbol(operator)}` : '';
+    }
+
+    function operatorSymbol(op) {
+      return { '+': '+', '-': '−', '*': '×', '/': '÷', '%': '%' }[op] || op;
+    }
+
+    function inputNumber(num) {
+      if (resetNext) {
+        current = num;
+        resetNext = false;
+      } else {
+        current = current === '0' ? num : current + num;
+      }
+      updateDisplay();
+    }
+
+    function inputDot() {
+      if (resetNext) {
+        current = '0.';
+        resetNext = false;
+      } else if (!current.includes('.')) {
+        current += '.';
+      }
+      updateDisplay();
+    }
+
+    function inputOperator(op) {
+      if (operator && !resetNext) {
+        calculate(true);
+      }
+      previous = current;
+      operator = op;
+      resetNext = true;
+      updateDisplay();
+    }
+
+    function calculate(chain = false) {
+      if (!operator || resetNext) return;
+      const a = parseFloat(previous);
+      const b = parseFloat(current);
+      let result;
+      switch (operator) {
+        case '+': result = a + b; break;
+        case '-': result = a - b; break;
+        case '*': result = a * b; break;
+        case '/': result = b === 0 ? 'エラー' : a / b; break;
+        case '%': result = a % b; break;
+      }
+      current = result === 'エラー' ? 'エラー' : String(parseFloat(result.toFixed(10)));
+      if (!chain) operator = null;
+      resetNext = true;
+      updateDisplay();
+    }
+
+    function clearAll() {
+      current = '0';
+      previous = '';
+      operator = null;
+      resetNext = false;
+      updateDisplay();
+    }
+
+    function toggleSign() {
+      current = String(parseFloat(current) * -1);
+      updateDisplay();
+    }
+
+    updateDisplay();
+  </script>
+</body>
+</html>
