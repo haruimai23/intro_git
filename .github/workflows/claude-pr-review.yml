@@ -26,6 +26,5 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           show_full_output: true
           prompt: |
-            このPRのdescriptionに記載されているファイルをレビューしてください。
-            descriptionの内容: ${{ github.event.pull_request.body }}
-            ファイルをレビューして結果をPRにコメントしてください。
+            このPRで変更されたファイルをすべてレビューしてください。
+            レビュー結果をPRにコメントしてください。
