@@ -24,10 +24,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           show_full_output: true
           additional_permissions: |
-            Bash(gh pr view*)
-            Bash(gh pr list*)
-            Bash(gh pr comment*)
             Bash(git diff*)
+            Bash(git log*)
+            Bash(gh pr comment*)
+            Bash(cat *)
           prompt: |
-            このPRで変更されたファイルをすべてレビューしてください。
-            レビュー結果をPRにコメントしてください。
+            git diff origin/main...HEAD でこのPRの変更内容を確認し、
+            変更されたファイルをすべてレビューしてください。
+            レビュー結果をgh pr comment コマンドでPRにコメントしてください。
