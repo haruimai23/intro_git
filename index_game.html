@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>テトリス</title>
+<style>
+  body {
+    background: #1e1e2e;
+    color: #eee;
+    font-family: "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 20px;
+  }
+  #board {
+    background: #111;
+    border: 4px solid #555;
+    display: block;
+  }
+  #next {
+    background: #111;
+    border: 4px solid #555;
+    display: block;
+    margin-top: 8px;
+  }
+  .panel {
+    width: 160px;
+  }
+  .info {
+    background: #2a2a3a;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .info div {
+    margin: 4px 0;
+  }
+  #message {
+    font-weight: bold;
+    color: #ff6b6b;
+    min-height: 24px;
+  }
+  button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 8px;
+    cursor: pointer;
+  }
+  .controls {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #aaa;
+  }
+</style>
+</head>
+<body>
+
+<div>
+  <h1>テトリス</h1>
+  <canvas id="board" width="240" height="480"></canvas>
+</div>
+
+<div class="panel">
+  <div class="info">
+    <div>スコア: <span id="score">0</span></div>
+    <div>ライン: <span id="lines">0</span></div>
+    <div>レベル: <span id="level">1</span></div>
+  </div>
+  <div>NEXT</div>
+  <canvas id="next" width="120" height="120"></canvas>
+  <div id="message"></div>
+  <button id="startBtn">スタート / 再スタート</button>
+  <button id="pauseBtn">一時停止</button>
+  <div class="controls">
+    <p>← → : 移動<br>
+    ↑ : 回転<br>
+    ↓ : ソフトドロップ<br>
+    スペース : ハードドロップ<br>
+    P : 一時停止</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  const COLS = 10;
+  const ROWS = 20;
+  const BLOCK = 24;
+
+  const boardCanvas = document.getElementById('board');
+  const ctx = boardCanvas.getContext('2d');
+  const nextCanvas = document.getElementById('next');
+  const nextCtx = nextCanvas.getContext('2d');
+
+  const scoreEl = document.getElementById('score');
+  const linesEl = document.getElementById('lines');
+  const levelEl = document.getElementById('level');
+  const messageEl = document.getElementById('message');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+
+  const COLORS = {
+    I: '#00f0f0',
+    O: '#f0f000',
+    T: '#a000f0',
+    S: '#00f000',
+    Z: '#f00000',
+    J: '#0000f0',
+    L: '#f0a000'
+  };
+
+  const SHAPES = {
+    I: [
+      [0, 1], [1, 1], [2, 1], [3, 1]
+    ],
+    O: [
+      [0, 0], [1, 0], [0, 1], [1, 1]
+    ],
+    T: [
+      [0, 1], [1, 1], [2, 1], [1, 0]
+    ],
+    S: [
+      [1, 0], [2, 0], [0, 1], [1, 1]
+    ],
+    Z: [
+      [0, 0], [1, 0], [1, 1], [2, 1]
+    ],
+    J: [
+      [0, 0], [0, 1], [1, 1], [2, 1]
+    ],
+    L: [
+      [2, 0], [0, 1], [1, 1], [2, 1]
+    ]
+  };
+
+  const PIECE_TYPES = Object.keys(SHAPES);
+
+  let board = createEmptyBoard();
+  let current = null;
+  let next = null;
+  let score = 0;
+  let lines = 0;
+  let level = 1;
+  let dropInterval = 1000;
+  let dropTimer = null;
+  let paused = false;
+  let gameOver = false;
+  let running = false;
+
+  function createEmptyBoard() {
+    return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  }
+
+  function randomPiece() {
+    const type = PIECE_TYPES[Math.floor(Math.random() * PIECE_TYPES.length)];
+    return {
+      type: type,
+      cells: SHAPES[type].map(([x, y]) => ({ x, y })),
+      x: 3,
+      y: 0
+    };
+  }
+
+  function rotateCells(cells) {
+    // rotate around bounding box center (approx, works for 4x4 grid pieces)
+    const maxX = Math.max(...cells.map(c => c.x));
+    return cells.map(({ x, y }) => ({ x: maxX - y, y: x }));
+  }
+
+  function absoluteCells(piece) {
+    return piece.cells.map(c => ({ x: c.x + piece.x, y: c.y + piece.y }));
+  }
+
+  function collides(cells) {
+    for (const { x, y } of cells) {
+      if (x < 0 || x >= COLS || y >= ROWS) return true;
+      if (y >= 0 && board[y][x]) return true;
+    }
+    return false;
+  }
+
+  function mergePiece() {
+    for (const { x, y } of absoluteCells(current)) {
+      if (y >= 0) board[y][x] = current.type;
+    }
+  }
+
+  function clearLines() {
+    let cleared = 0;
+    for (let y = ROWS - 1; y >= 0; y--) {
+      if (board[y].every(cell => cell)) {
+        board.splice(y, 1);
+        board.unshift(Array(COLS).fill(null));
+        cleared++;
+        y++;
+      }
+    }
+    if (cleared > 0) {
+      const points = [0, 100, 300, 500, 800][cleared] || 800;
+      score += points * level;
+      lines += cleared;
+      level = Math.floor(lines / 10) + 1;
+      dropInterval = Math.max(100, 1000 - (level - 1) * 100);
+      updateInfo();
+    }
+  }
+
+  function updateInfo() {
+    scoreEl.textContent = score;
+    linesEl.textContent = lines;
+    levelEl.textContent = level;
+  }
+
+  function spawnPiece() {
+    current = next || randomPiece();
+    next = randomPiece();
+    current.x = 3;
+    current.y = 0;
+    if (collides(absoluteCells(current))) {
+      endGame();
+    }
+    drawNext();
+  }
+
+  function endGame() {
+    gameOver = true;
+    running = false;
+    clearInterval(dropTimer);
+    messageEl.textContent = 'ゲームオーバー';
+  }
+
+  function move(dx, dy) {
+    if (!current || paused || gameOver) return false;
+    const moved = { ...current, x: current.x + dx, y: current.y + dy };
+    const cells = moved.cells.map(c => ({ x: c.x + moved.x, y: c.y + moved.y }));
+    if (collides(cells)) return false;
+    current.x = moved.x;
+    current.y = moved.y;
+    return true;
+  }
+
+  function rotate() {
+    if (!current || paused || gameOver) return;
+    const rotated = rotateCells(current.cells);
+    const cells = rotated.map(c => ({ x: c.x + current.x, y: c.y + current.y }));
+    if (!collides(cells)) {
+      current.cells = rotated;
+      return;
+    }
+    // wall kick attempts
+    for (const kick of [-1, 1, -2, 2]) {
+      const kicked = cells.map(c => ({ x: c.x + kick, y: c.y }));
+      if (!collides(kicked)) {
+        current.cells = rotated;
+        current.x += kick;
+        return;
+      }
+    }
+  }
+
+  function softDrop() {
+    if (!move(0, 1)) {
+      lockPiece();
+    } else {
+      score += 1;
+      updateInfo();
+    }
+  }
+
+  function hardDrop() {
+    if (!current || paused || gameOver) return;
+    let dropped = 0;
+    while (move(0, 1)) dropped++;
+    score += dropped * 2;
+    updateInfo();
+    lockPiece();
+  }
+
+  function lockPiece() {
+    mergePiece();
+    clearLines();
+    if (!gameOver) spawnPiece();
+    draw();
+  }
+
+  function tick() {
+    if (paused || gameOver) return;
+    if (!move(0, 1)) {
+      lockPiece();
+    }
+    draw();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, boardCanvas.width, boardCanvas.height);
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (board[y][x]) {
+          drawBlock(ctx, x, y, COLORS[board[y][x]]);
+        }
+      }
+    }
+    if (current) {
+      for (const { x, y } of absoluteCells(current)) {
+        if (y >= 0) drawBlock(ctx, x, y, COLORS[current.type]);
+      }
+    }
+  }
+
+  function drawBlock(context, x, y, color) {
+    context.fillStyle = color;
+    context.fillRect(x * BLOCK, y * BLOCK, BLOCK - 1, BLOCK - 1);
+    context.strokeStyle = 'rgba(255,255,255,0.2)';
+    context.strokeRect(x * BLOCK, y * BLOCK, BLOCK - 1, BLOCK - 1);
+  }
+
+  function drawNext() {
+    nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+    if (!next) return;
+    const size = 24;
+    for (const { x, y } of next.cells) {
+      drawBlock(nextCtx, x, y, COLORS[next.type]);
+    }
+  }
+
+  function startGame() {
+    clearInterval(dropTimer);
+    board = createEmptyBoard();
+    score = 0;
+    lines = 0;
+    level = 1;
+    dropInterval = 1000;
+    paused = false;
+    gameOver = false;
+    running = true;
+    messageEl.textContent = '';
+    updateInfo();
+    next = randomPiece();
+    spawnPiece();
+    draw();
+    dropTimer = setInterval(tick, dropInterval);
+    resetTimer();
+  }
+
+  function resetTimer() {
+    clearInterval(dropTimer);
+    dropTimer = setInterval(tick, dropInterval);
+  }
+
+  function togglePause() {
+    if (!running || gameOver) return;
+    paused = !paused;
+    messageEl.textContent = paused ? '一時停止中' : '';
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!running) return;
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        move(-1, 0);
+        draw();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        move(1, 0);
+        draw();
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        softDrop();
+        draw();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        rotate();
+        draw();
+        break;
+      case ' ':
+        e.preventDefault();
+        hardDrop();
+        break;
+      case 'p':
+      case 'P':
+        e.preventDefault();
+        togglePause();
+        break;
+    }
+  });
+
+  startBtn.addEventListener('click', startGame);
+  pauseBtn.addEventListener('click', togglePause);
+
+  // watch level changes to adjust timer speed
+  const originalUpdateInfo = updateInfo;
+  updateInfo = function () {
+    const prevLevel = levelEl.textContent;
+    originalUpdateInfo();
+    if (String(level) !== prevLevel) {
+      resetTimer();
+    }
+  };
+
+  draw();
+})();
+</script>
+
+</body>
+</html>
