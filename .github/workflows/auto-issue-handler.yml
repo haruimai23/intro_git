@@ -1,0 +1,34 @@
+name: Auto Issue Handler
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # 10分おきに実行
+  workflow_dispatch:
+
+jobs:
+  handle-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
+          additional_permissions: |
+            Bash(gh issue*)
+            Bash(gh pr*)
+            Bash(git*)
+          prompt: |
+            以下の手順を実行してください：
+            1. gh issue list --state open でIssue一覧を取得する
+            2. 各Issueの内容を確認し「プログラムを作成」という内容であれば：
+               - プログラムファイルを作成する
+               - テスト仕様書（.md）を作成する
+               - git add, commit, push でmainブランチにPUSHする
+               - gh issue comment でIssueに完了コメントを投稿する
+            3. 対応完了のIssueはスキップする
+ 
