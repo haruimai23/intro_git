@@ -1,4 +1,4 @@
-name: Deploy to Server
+name: Deploy and Test
 on:
   push:
     branches: [main]
@@ -16,3 +16,20 @@ jobs:
           script: |
             cd /var/www/html
             git pull origin main
+
+  test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install Playwright
+        run: npm install -D @playwright/test
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright tests
+        run: npx playwright test
+        env:
+          BASE_URL: http://160.16.230.177
