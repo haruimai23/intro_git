@@ -27,8 +27,9 @@ jobs:
             1. gh issue list --state open でIssue一覧を取得する
             2. 各Issueの内容を確認し「プログラムを作成」という内容であれば：
                - プログラムファイルを作成する
-               - テスト仕様書（.md）を作成する
+               - テスト仕様書（test_xxx.md）を作成する
+               - テスト仕様書をもとにPlaywrightのテストファイル（test_xxx.spec.ts）を作成する
+               - BASE_URLはhttp://160.16.230.177を使用する
                - git add, commit, push でmainブランチにPUSHする
                - gh issue comment でIssueに完了コメントを投稿する
             3. 対応完了のIssueはスキップする
- 
