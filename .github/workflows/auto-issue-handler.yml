@@ -4,6 +4,10 @@ on:
     - cron: '*/10 * * * *'  # 10分おきに実行
   workflow_dispatch:
 
+concurrency:
+  group: auto-issue-handler
+  cancel-in-progress: false
+
 jobs:
   handle-issues:
     runs-on: ubuntu-latest
@@ -18,10 +22,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           show_full_output: true
-          additional_permissions: |
-            Bash(gh issue*)
-            Bash(gh pr*)
-            Bash(git*)
+          claude_args: |
+            --allowedTools "Bash(gh:*),Bash(git:*)"
           prompt: |
             以下の手順を実行してください：
             1. gh issue list --state open でIssue一覧を取得する
@@ -32,4 +34,5 @@ jobs:
                - BASE_URLはhttp://160.16.230.177を使用する
                - git add, commit, push でmainブランチにPUSHする
                - gh issue comment でIssueに完了コメントを投稿する
-            3. 対応完了のIssueはスキップする
+               - gh issue close でIssueをcloseする
+            3. 対応完了（close済み）のIssueはスキップする
