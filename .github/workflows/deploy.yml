@@ -34,3 +34,10 @@ jobs:
         run: npx playwright test
         env:
           BASE_URL: http://160.16.230.177
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
