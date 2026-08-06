@@ -28,7 +28,9 @@ jobs:
               "permissions": {
                 "allow": [
                   "Bash(gh:*)",
-                  "Bash(git:*)"
+                  "Bash(git:*)",
+                  "Write",
+                  "Edit"
                 ]
               }
             }
