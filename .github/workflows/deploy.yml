@@ -31,7 +31,7 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
       - name: Run Playwright tests
-        run: npx playwright test
+        run: npx playwright test --reporter=html
         env:
           BASE_URL: http://160.16.230.177
       - name: Upload Playwright report
