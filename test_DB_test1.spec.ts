@@ -19,6 +19,9 @@ const TEST_4_NAME = "閉じるボタン押下がエラーなく実行できる";
 
 const ZERO = 0;
 
+// スクリーンショット保存先ディレクトリ
+const SCREENSHOT_DIR = "screenshots/test_DB_test1";
+
 test.describe(SUITE_NAME, function () {
   test(TEST_1_NAME, async function ({ page }) {
     await page.goto(TARGET_URL);
@@ -27,6 +30,12 @@ test.describe(SUITE_NAME, function () {
     await expect(page.locator(SEL_LOG_TABLE)).toHaveCount(ZERO);
     await expect(page.locator(SEL_NO_DATA)).toHaveCount(ZERO);
     await expect(page.locator(SEL_ERROR)).toHaveCount(ZERO);
+
+    // 初期表示状態のハードコピー
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/01_initial_view.png`,
+      fullPage: true,
+    });
   });
 
   test(TEST_2_NAME, async function ({ page }) {
@@ -36,6 +45,12 @@ test.describe(SUITE_NAME, function () {
     const noData = page.locator(SEL_NO_DATA);
     const error = page.locator(SEL_ERROR);
     await expect(table.or(noData).or(error)).toBeVisible();
+
+    // 表示ボタン押下後の結果(テーブル/データなし/エラーのいずれか)のハードコピー
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/02_after_show_click.png`,
+      fullPage: true,
+    });
   });
 
   test(TEST_3_NAME, async function ({ page }) {
@@ -45,11 +60,24 @@ test.describe(SUITE_NAME, function () {
     const count = await table.count();
     if (count > ZERO) {
       await expect(page.locator(SEL_TABLE_HEADER).first()).toBeVisible();
+
+      // テーブル見出し表示状態のハードコピー
+      await page.screenshot({
+        path: `${SCREENSHOT_DIR}/03_table_with_header.png`,
+        fullPage: true,
+      });
     }
   });
 
   test(TEST_4_NAME, async function ({ page }) {
     await page.goto(TARGET_URL);
+
+    // 閉じるボタン押下前の状態のハードコピー
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/04_before_close.png`,
+      fullPage: true,
+    });
+
     await page.locator(SEL_CLOSE_BTN).click();
   });
 });
