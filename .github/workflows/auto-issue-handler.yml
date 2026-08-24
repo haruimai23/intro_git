@@ -42,6 +42,12 @@ jobs:
                - テスト仕様書（test_xxx.md）を作成する
                - テスト仕様書をもとにPlaywrightのテストファイル（test_xxx.spec.ts）を作成する
                - BASE_URLはhttp://160.16.230.177を使用する
+               - テストファイル内の各テストケースについて、主要な操作（初期表示直後、
+                 ボタン押下後、状態変化後など）のタイミングでpage.screenshot()を用いて
+                 スクリーンショットを保存すること
+               - スクリーンショットの保存先はscreenshots/test_xxx/ ディレクトリとし、
+                 ファイル名は連番と内容が分かる名前（例: 01_initial_view.png）とすること
+               - fullPage: true を指定してページ全体をキャプチャすること
                - git add, commit, push でmainブランチにPUSHする
                - gh issue comment でIssueに完了コメントを投稿する
                - gh issue close でIssueをcloseする
