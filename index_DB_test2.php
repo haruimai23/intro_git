@@ -55,6 +55,8 @@ endif;
   <button type="button" id="closeBtn">閉じる</button>
 </form>
 
+<p id="closeMessage" style="display:none;">このタブを閉じてください</p>
+
 <div id="result">
 <?php if ($showResult): ?>
   <?php if ($message !== ''): ?>
@@ -87,6 +89,9 @@ endif;
 <script>
 document.getElementById('closeBtn').addEventListener('click', function () {
   window.close();
+  setTimeout(function () {
+    document.getElementById('closeMessage').style.display = 'block';
+  }, 100);
 });
 </script>
 </body>
