@@ -46,6 +46,7 @@ endif;
   table { border-collapse: collapse; margin-top: 16px; }
   th, td { border: 1px solid #999; padding: 4px 8px; }
   button { margin-right: 8px; padding: 6px 16px; }
+  #showBtn { background-color: #007bff; color: #fff; border: 1px solid #007bff; }
 </style>
 </head>
 <body>
