@@ -226,6 +226,8 @@
   const resetHighScoreBtn = document.getElementById("resetHighScoreBtn");
   const rankingEl = document.getElementById("ranking");
   const resetRankingBtn = document.getElementById("resetRankingBtn");
+  // 初期表示でランキング欄が非表示状態(hidden)にならないよう明示的に解除する
+  rankingEl.hidden = false;
   const COLORS = {};
   COLORS.I = "#00f0f0";
   COLORS.O = "#f0f000";

@@ -73,6 +73,8 @@ test.describe("テトリス Next12", function () {
     await page.goto(BASE_URL + PAGE_PATH);
     await page.evaluate(() => localStorage.removeItem("tetrisNext12Ranking"));
     await page.reload();
+    await expect(page.locator("#ranking")).toBeVisible();
+    await expect(page.locator("#ranking")).not.toHaveAttribute("hidden", "");
     await expect(page.locator("#ranking li")).toHaveCount(0);
 
     // 初期ランキング状態のハードコピー
