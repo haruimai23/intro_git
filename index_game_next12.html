@@ -311,7 +311,10 @@
     try {
       const stored = JSON.parse(localStorage.getItem(RANKING_KEY));
       if (Array.isArray(stored)) {
-        return stored.filter(n => Number.isFinite(n)).slice(0, RANKING_SIZE);
+        return stored
+          .filter(n => Number.isFinite(n))
+          .sort((a, b) => b - a)
+          .slice(0, RANKING_SIZE);
       }
     } catch (e) {
       // 無効なデータの場合は空のランキングとして扱う
