@@ -110,6 +110,7 @@
   ol#ranking {
     margin: 0;
     padding-left: 18px;
+    min-height: 1.4em;
   }
   ol#ranking li {
     margin: 2px 0;
@@ -226,7 +227,9 @@
   const resetHighScoreBtn = document.getElementById("resetHighScoreBtn");
   const rankingEl = document.getElementById("ranking");
   const resetRankingBtn = document.getElementById("resetRankingBtn");
-  // 初期表示でランキング欄が非表示状態(hidden)にならないよう明示的に解除する
+  // hidden属性が付与された状態で配信された場合でも表示されるよう明示的に解除する
+  // (空の<ol>はCSSのmin-heightが無いと高さ0になり可視要素として扱われないため、
+  //  スタイル側にもol#rankingの min-height を設定している)
   rankingEl.hidden = false;
   const COLORS = {};
   COLORS.I = "#00f0f0";
