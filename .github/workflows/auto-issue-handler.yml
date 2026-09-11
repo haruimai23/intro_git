@@ -17,6 +17,10 @@ jobs:
       pull-requests: write
       id-token: write
       actions: write
+    env:
+      # project スコープ付きのPAT（Settings > Secrets and variables > Actions に
+      # PROJECT_TOKEN という名前で登録してください）
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: anthropics/claude-code-action@v1
@@ -39,6 +43,18 @@ jobs:
             1. gh issue list --state open でIssue一覧を取得する
             2. 各Issueの内容を確認し「プログラムを新規作成する依頼」または
                「既存プログラムの修正・不具合対応を依頼する内容」であれば：
+               - 対応を開始する前に、そのIssueが紐づいているプロジェクト
+                 （@haruimai23's project_1）のStatusフィールドを
+                 「In Progress」に変更すること。
+                 手順の例：
+                   a. gh project item-list <project番号> --owner haruimai23 --format json
+                      で、対象Issueに対応するプロジェクトアイテムIDを取得する
+                   b. gh project field-list <project番号> --owner haruimai23 --format json
+                      で、Statusフィールドのfield-idと「In Progress」のoption-idを取得する
+                   c. gh project item-edit --id <アイテムID> --field-id <StatusのフィールドID>
+                      --project-id <プロジェクトID> --single-select-option-id <In ProgressのオプションID>
+                      でステータスを更新する
+                 （プロジェクトに紐づいていないIssueの場合はこの手順をスキップして構いません）
                - 新規作成の場合：プログラムファイルを作成する
                - 修正の場合：対象のプログラムファイルを特定し、Issueの内容に沿って修正する
                - テスト仕様書（test_xxx.md）を作成または更新する
@@ -54,8 +70,12 @@ jobs:
                - fullPage: true を指定してページ全体をキャプチャすること
                - git add, commit, push でmainブランチにPUSHする
                - gh issue comment でIssueに完了コメントを投稿する
-               - gh issue close でIssueをcloseする
-            3. 対応完了（close済み）のIssueはスキップする
+               - Issueのcloseは行わないこと。対応が完了しても
+                 Issueはopenのまま、Statusは「In Progress」の状態で止めておくこと。
+                 最終確認とcloseは人間が行うため、gh issue close は絶対に実行しないこと。
+            3. Statusが既に「In Progress」または「Done」になっているIssue、
+               あるいは既に完了コメントを投稿済みのIssueは、二重対応を避けるため
+               スキップする
 
       - name: Trigger deploy workflow
         run: gh workflow run deploy.yml --ref main
