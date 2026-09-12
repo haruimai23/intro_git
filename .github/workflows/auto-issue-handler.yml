@@ -43,18 +43,52 @@ jobs:
             1. gh issue list --state open でIssue一覧を取得する
             2. 各Issueの内容を確認し「プログラムを新規作成する依頼」または
                「既存プログラムの修正・不具合対応を依頼する内容」であれば：
+
                - 対応を開始する前に、そのIssueが紐づいているプロジェクト
                  （@haruimai23's project_1）のStatusフィールドを
-                 「In Progress」に変更すること。
-                 手順の例：
-                   a. gh project item-list <project番号> --owner haruimai23 --format json
-                      で、対象Issueに対応するプロジェクトアイテムIDを取得する
-                   b. gh project field-list <project番号> --owner haruimai23 --format json
-                      で、Statusフィールドのfield-idと「In Progress」のoption-idを取得する
-                   c. gh project item-edit --id <アイテムID> --field-id <StatusのフィールドID>
-                      --project-id <プロジェクトID> --single-select-option-id <In ProgressのオプションID>
-                      でステータスを更新する
-                 （プロジェクトに紐づいていないIssueの場合はこの手順をスキップして構いません）
+                 「In Progress」に変更すること。判定・更新は必ず以下の
+                 具体的な手順で行い、途中で「見つからない」場合でも
+                 安易に「紐づいていない」と判断せず、必ずlimitを
+                 十分大きく指定して再確認すること：
+
+                 a. gh issue view <issue番号> --json id,number,title
+                    で対象Issueの内容を確認する
+
+                 b. gh project list --owner haruimai23 --format json --limit 100
+                    で「project_1」というタイトルを含むプロジェクトを探し、
+                    そのプロジェクトのnumberとidを取得する
+                    （タイトルに「project_1」という文字列を含むものを対象とする）
+
+                 c. gh project item-list <bで取得したproject番号> --owner haruimai23
+                    --format json --limit 200
+                    のように、必ず --limit 200 以上を指定して全アイテムを取得し、
+                    その中から content.number が対象Issueの番号と一致する
+                    アイテムを探し、そのアイテムのidを取得する。
+                    --limit を指定せずに実行した場合、デフォルトの取得件数制限により
+                    最近追加されたIssueが結果に含まれず、誤って「紐づいていない」と
+                    判断してしまうことがあるため、必ず --limit 200 以上を指定すること。
+
+                 d. cで対象アイテムが見つかった場合：
+                    gh project field-list <project番号> --owner haruimai23 --format json
+                    で「Status」という名前のフィールドのidを取得し、
+                    そのフィールドのoptionsの中から名前が「In Progress」の
+                    オプションのidを取得する
+
+                 e. 以下のコマンドでStatusを更新する：
+                    gh project item-edit --id <cで取得したアイテムID>
+                    --field-id <dで取得したStatusのフィールドID>
+                    --project-id <bで取得したプロジェクトID>
+                    --single-select-option-id <dで取得したIn ProgressのオプションID>
+
+                 f. cの手順で --limit 200 を指定しても対象アイテムが
+                    本当に見つからなかった場合に限り、この手順をスキップし、
+                    その場合は完了コメントに「このIssueはプロジェクトに
+                    紐づいていなかったため、Statusの更新はスキップしました」
+                    と明記すること。また、item-editコマンドの実行時にエラーが
+                    出た場合は、そのエラーメッセージの内容を完了コメントに
+                    そのまま含めること（権限不足なのか、IDの指定誤りなのかを
+                    後で判別できるようにするため）。
+
                - 新規作成の場合：プログラムファイルを作成する
                - 修正の場合：対象のプログラムファイルを特定し、Issueの内容に沿って修正する
                - テスト仕様書（test_xxx.md）を作成または更新する
