@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ブロック崩し 1</title>
+<style>
+  body {
+    background: #1e1e2e;
+    color: #eee;
+    font-family: Arial, Helvetica, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 20px;
+  }
+  canvas#board {
+    background: #111;
+    border: 4px solid #555;
+    display: block;
+  }
+  .panel {
+    width: 180px;
+  }
+  .info {
+    background: #2a2a3a;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .info div {
+    margin: 4px 0;
+  }
+  div#message {
+    font-weight: bold;
+    color: #ff6b6b;
+    min-height: 24px;
+  }
+  button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 8px;
+    cursor: pointer;
+  }
+  .controls {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #aaa;
+  }
+</style>
+</head>
+<body>
+
+<div>
+  <h1>ブロック崩し 1</h1>
+  <canvas id="board" width="480" height="520"></canvas>
+</div>
+
+<div class="panel">
+  <div class="info">
+    <div>スコア: <span id="score">0</span></div>
+    <div>ハイスコア: <span id="highScore">0</span></div>
+    <div>残機: <span id="lives">3</span></div>
+  </div>
+  <div id="message"></div>
+  <button id="startBtn">スタート / 再スタート</button>
+  <button id="pauseBtn">一時停止</button>
+  <button id="resetHighScoreBtn">ハイスコアをリセット</button>
+  <div class="controls">
+    <p>← → : パドル移動<br>
+    P : 一時停止</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  const CANVAS_WIDTH = 480;
+  const CANVAS_HEIGHT = 520;
+  const HIGH_SCORE_KEY = "breakout1HighScore";
+
+  const BRICK_ROWS = 5;
+  const BRICK_COLS = 8;
+  const BRICK_WIDTH = 54;
+  const BRICK_HEIGHT = 18;
+  const BRICK_PADDING = 4;
+  const BRICK_OFFSET_TOP = 40;
+  const BRICK_OFFSET_LEFT = 8;
+  const BRICK_COLORS = ["#f00000", "#f0a000", "#f0f000", "#00f000", "#00a0f0"];
+
+  const PADDLE_WIDTH = 75;
+  const PADDLE_HEIGHT = 12;
+  const PADDLE_Y = CANVAS_HEIGHT - 30;
+  const PADDLE_STEP = 24;
+
+  const BALL_RADIUS = 7;
+  const BALL_SPEED = 3.5;
+  const MAX_BOUNCE_DX = 5;
+
+  const INITIAL_LIVES = 3;
+
+  const boardCanvas = document.getElementById("board");
+  const ctx = boardCanvas.getContext("2d");
+
+  const scoreEl = document.getElementById("score");
+  const highScoreEl = document.getElementById("highScore");
+  const livesEl = document.getElementById("lives");
+  const messageEl = document.getElementById("message");
+  const startBtn = document.getElementById("startBtn");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const resetHighScoreBtn = document.getElementById("resetHighScoreBtn");
+
+  let bricks = [];
+  let paddleX = (CANVAS_WIDTH - PADDLE_WIDTH) / 2;
+  let ball = null;
+  let score = 0;
+  let highScore = loadHighScore();
+  let lives = INITIAL_LIVES;
+  let running = false;
+  let paused = false;
+  let gameOver = false;
+  let cleared = false;
+  let tickTimer = null;
+
+  function loadHighScore() {
+    const stored = Number(localStorage.getItem(HIGH_SCORE_KEY));
+    return Number.isFinite(stored) && stored > 0 ? stored : 0;
+  }
+
+  function saveHighScore() {
+    localStorage.setItem(HIGH_SCORE_KEY, String(highScore));
+  }
+
+  function createBricks() {
+    const grid = [];
+    for (let row = 0; row < BRICK_ROWS; row++) {
+      for (let col = 0; col < BRICK_COLS; col++) {
+        grid.push({
+          x: BRICK_OFFSET_LEFT + col * (BRICK_WIDTH + BRICK_PADDING),
+          y: BRICK_OFFSET_TOP + row * (BRICK_HEIGHT + BRICK_PADDING),
+          alive: true,
+          color: BRICK_COLORS[row % BRICK_COLORS.length]
+        });
+      }
+    }
+    return grid;
+  }
+
+  function resetBall() {
+    ball = {
+      x: paddleX + PADDLE_WIDTH / 2,
+      y: PADDLE_Y - BALL_RADIUS,
+      dx: 0,
+      dy: -BALL_SPEED
+    };
+  }
+
+  function updateInfo() {
+    scoreEl.textContent = score;
+    if (score > highScore) {
+      highScore = score;
+      saveHighScore();
+    }
+    highScoreEl.textContent = highScore;
+    livesEl.textContent = lives;
+  }
+
+  function startGame() {
+    clearInterval(tickTimer);
+    bricks = createBricks();
+    paddleX = (CANVAS_WIDTH - PADDLE_WIDTH) / 2;
+    score = 0;
+    lives = INITIAL_LIVES;
+    running = true;
+    paused = false;
+    gameOver = false;
+    cleared = false;
+    messageEl.textContent = "";
+    resetBall();
+    updateInfo();
+    draw();
+    tickTimer = setInterval(tick, 16);
+  }
+
+  function endGame() {
+    gameOver = true;
+    running = false;
+    clearInterval(tickTimer);
+    messageEl.textContent = "ゲームオーバー";
+  }
+
+  function winGame() {
+    cleared = true;
+    running = false;
+    clearInterval(tickTimer);
+    messageEl.textContent = "クリア!";
+  }
+
+  function movePaddle(dx) {
+    if (!running || paused || gameOver || cleared) return;
+    paddleX = Math.max(0, Math.min(CANVAS_WIDTH - PADDLE_WIDTH, paddleX + dx));
+  }
+
+  function togglePause() {
+    if (!running || gameOver || cleared) return;
+    paused = !paused;
+    messageEl.textContent = paused ? "一時停止中" : "";
+  }
+
+  function resetHighScore() {
+    highScore = 0;
+    saveHighScore();
+    highScoreEl.textContent = highScore;
+  }
+
+  function rectIntersectsBall(rect, width, height) {
+    const closestX = Math.max(rect.x, Math.min(ball.x, rect.x + width));
+    const closestY = Math.max(rect.y, Math.min(ball.y, rect.y + height));
+    const dx = ball.x - closestX;
+    const dy = ball.y - closestY;
+    return dx * dx + dy * dy <= BALL_RADIUS * BALL_RADIUS;
+  }
+
+  function tick() {
+    if (!running || paused || gameOver || cleared) return;
+
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+
+    if (ball.x - BALL_RADIUS <= 0) {
+      ball.x = BALL_RADIUS;
+      ball.dx = -ball.dx;
+    } else if (ball.x + BALL_RADIUS >= CANVAS_WIDTH) {
+      ball.x = CANVAS_WIDTH - BALL_RADIUS;
+      ball.dx = -ball.dx;
+    }
+    if (ball.y - BALL_RADIUS <= 0) {
+      ball.y = BALL_RADIUS;
+      ball.dy = -ball.dy;
+    }
+
+    for (const brick of bricks) {
+      if (!brick.alive) continue;
+      if (rectIntersectsBall(brick, BRICK_WIDTH, BRICK_HEIGHT)) {
+        brick.alive = false;
+        ball.dy = -ball.dy;
+        score += 10;
+        updateInfo();
+        if (bricks.every(b => !b.alive)) {
+          winGame();
+        }
+        break;
+      }
+    }
+
+    if (
+      ball.dy > 0 &&
+      ball.y + BALL_RADIUS >= PADDLE_Y &&
+      ball.y + BALL_RADIUS <= PADDLE_Y + PADDLE_HEIGHT &&
+      ball.x >= paddleX &&
+      ball.x <= paddleX + PADDLE_WIDTH
+    ) {
+      ball.y = PADDLE_Y - BALL_RADIUS;
+      ball.dy = -Math.abs(ball.dy);
+      const offset = (ball.x - (paddleX + PADDLE_WIDTH / 2)) / (PADDLE_WIDTH / 2);
+      ball.dx = offset * MAX_BOUNCE_DX;
+    } else if (ball.y - BALL_RADIUS > CANVAS_HEIGHT) {
+      lives -= 1;
+      updateInfo();
+      if (lives <= 0) {
+        endGame();
+      } else {
+        resetBall();
+      }
+    }
+
+    draw();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    for (const brick of bricks) {
+      if (!brick.alive) continue;
+      ctx.fillStyle = brick.color;
+      ctx.fillRect(brick.x, brick.y, BRICK_WIDTH, BRICK_HEIGHT);
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.strokeRect(brick.x, brick.y, BRICK_WIDTH, BRICK_HEIGHT);
+    }
+
+    ctx.fillStyle = "#4dd0ff";
+    ctx.fillRect(paddleX, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+    if (ball) {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = "#eee";
+      ctx.fill();
+    }
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (!running) return;
+    switch (e.key) {
+      case "ArrowLeft":
+        e.preventDefault();
+        movePaddle(-PADDLE_STEP);
+        draw();
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        movePaddle(PADDLE_STEP);
+        draw();
+        break;
+      case "p":
+      case "P":
+        e.preventDefault();
+        togglePause();
+        break;
+    }
+  });
+
+  startBtn.addEventListener("click", startGame);
+  pauseBtn.addEventListener("click", togglePause);
+  resetHighScoreBtn.addEventListener("click", resetHighScore);
+
+  bricks = createBricks();
+  resetBall();
+  highScoreEl.textContent = highScore;
+  updateInfo();
+  draw();
+
+  // テスト自動化用の読み取り専用状態取得・状態強制遷移フック(通常のゲームプレイには影響しない)
+  window.__test = {
+    getState: function () {
+      return {
+        score: score,
+        lives: lives,
+        paddleX: paddleX,
+        ballX: ball ? ball.x : null,
+        ballY: ball ? ball.y : null,
+        bricksAlive: bricks.filter(function (b) { return b.alive; }).length,
+        running: running,
+        paused: paused,
+        gameOver: gameOver,
+        cleared: cleared
+      };
+    },
+    forceWin: function () {
+      bricks.forEach(function (b) { b.alive = false; });
+      winGame();
+      draw();
+    },
+    forceGameOver: function () {
+      lives = 0;
+      updateInfo();
+      endGame();
+      draw();
+    }
+  };
+})();
+</script>
+
+</body>
+</html>
