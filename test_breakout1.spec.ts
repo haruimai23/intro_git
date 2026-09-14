@@ -55,6 +55,25 @@ test.describe("ブロック崩し 1", function () {
     });
   });
 
+  test("最上段のブロックがピンク色で表示される", async function ({ page }) {
+    await page.goto(BASE_URL + PAGE_PATH);
+    const pixel = await page.evaluate(() => {
+      const canvas = document.getElementById("board") as HTMLCanvasElement;
+      const ctx = canvas.getContext("2d")!;
+      const data = ctx.getImageData(35, 49, 1, 1).data;
+      return { r: data[0], g: data[1], b: data[2] };
+    });
+    expect(pixel.r).toBe(255);
+    expect(pixel.g).toBe(105);
+    expect(pixel.b).toBe(180);
+
+    // 最上段ブロック色確認のハードコピー
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/15_top_row_pink.png`,
+      fullPage: true,
+    });
+  });
+
   test("スタートボタン押下でゲームが開始し、ボールが移動を始める", async function ({ page }) {
     await page.goto(BASE_URL + PAGE_PATH);
     await page.locator("#startBtn").click();
