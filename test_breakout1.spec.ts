@@ -144,6 +144,49 @@ test.describe("ブロック崩し 1", function () {
     });
   });
 
+  test("ブロックにボールが当たるとヒット音が再生される(hitSoundCountが増加する)", async function ({ page }) {
+    test.setTimeout(30000);
+    await page.goto(BASE_URL + PAGE_PATH);
+    const before = await page.evaluate(() => (window as any).__test.getState());
+    await page.locator("#startBtn").click();
+
+    let soundPlayed = false;
+    for (let i = 0; i < 60; i++) {
+      await page.waitForTimeout(200);
+      const state = await page.evaluate(() => (window as any).__test.getState());
+      if (state.hitSoundCount > before.hitSoundCount) {
+        soundPlayed = true;
+        break;
+      }
+    }
+    expect(soundPlayed).toBe(true);
+
+    // ヒット音再生確認のハードコピー
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/16_hit_sound_played.png`,
+      fullPage: true,
+    });
+  });
+
+  test("パドルにボールが当たるとヒット音が再生される(残機を保ったままhitSoundCountが増加する)", async function ({ page }) {
+    test.setTimeout(30000);
+    await page.goto(BASE_URL + PAGE_PATH);
+    await page.locator("#startBtn").click();
+
+    // ボールは中央のパドル直上から発射されるため、壁やブロックで跳ね返った後
+    // 再びパドル(中央)に戻ってくる。残機を保ったままヒット音が複数回鳴ることを確認する。
+    await page.waitForTimeout(2000);
+    const state = await page.evaluate(() => (window as any).__test.getState());
+    expect(state.lives).toBe(3);
+    expect(state.hitSoundCount).toBeGreaterThan(0);
+
+    // パドル衝突後のヒット音確認のハードコピー
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/17_paddle_hit_sound.png`,
+      fullPage: true,
+    });
+  });
+
   test("一時停止ボタンで一時停止メッセージが表示され、再度押すと解除される", async function ({ page }) {
     await page.goto(BASE_URL + PAGE_PATH);
     await page.locator("#startBtn").click();

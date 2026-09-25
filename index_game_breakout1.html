@@ -124,6 +124,37 @@
   let gameOver = false;
   let cleared = false;
   let tickTimer = null;
+  let audioCtx = null;
+  let hitSoundCount = 0;
+
+  function getAudioContext() {
+    if (!audioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        audioCtx = new AudioContextClass();
+      }
+    }
+    return audioCtx;
+  }
+
+  function playHitSound(frequency) {
+    hitSoundCount++;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.value = frequency;
+    gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.08);
+  }
 
   function loadHighScore() {
     const stored = Number(localStorage.getItem(HIGH_SCORE_KEY));
@@ -233,13 +264,16 @@
     if (ball.x - BALL_RADIUS <= 0) {
       ball.x = BALL_RADIUS;
       ball.dx = -ball.dx;
+      playHitSound(220);
     } else if (ball.x + BALL_RADIUS >= CANVAS_WIDTH) {
       ball.x = CANVAS_WIDTH - BALL_RADIUS;
       ball.dx = -ball.dx;
+      playHitSound(220);
     }
     if (ball.y - BALL_RADIUS <= 0) {
       ball.y = BALL_RADIUS;
       ball.dy = -ball.dy;
+      playHitSound(220);
     }
 
     for (const brick of bricks) {
@@ -249,6 +283,7 @@
         ball.dy = -ball.dy;
         score += 10;
         updateInfo();
+        playHitSound(660);
         if (bricks.every(b => !b.alive)) {
           winGame();
         }
@@ -267,6 +302,7 @@
       ball.dy = -Math.abs(ball.dy);
       const offset = (ball.x - (paddleX + PADDLE_WIDTH / 2)) / (PADDLE_WIDTH / 2);
       ball.dx = offset * MAX_BOUNCE_DX;
+      playHitSound(440);
     } else if (ball.y - BALL_RADIUS > CANVAS_HEIGHT) {
       lives -= 1;
       updateInfo();
@@ -346,7 +382,8 @@
         running: running,
         paused: paused,
         gameOver: gameOver,
-        cleared: cleared
+        cleared: cleared,
+        hitSoundCount: hitSoundCount
       };
     },
     forceWin: function () {
