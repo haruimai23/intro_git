@@ -74,6 +74,25 @@ test.describe("ブロック崩し 1", function () {
     });
   });
 
+  test("パドル(ラケット)が赤色で表示される", async function ({ page }) {
+    await page.goto(BASE_URL + PAGE_PATH);
+    const pixel = await page.evaluate(() => {
+      const canvas = document.getElementById("board") as HTMLCanvasElement;
+      const ctx = canvas.getContext("2d")!;
+      const data = ctx.getImageData(240, 496, 1, 1).data;
+      return { r: data[0], g: data[1], b: data[2] };
+    });
+    expect(pixel.r).toBe(255);
+    expect(pixel.g).toBe(0);
+    expect(pixel.b).toBe(0);
+
+    // パドル色確認のハードコピー
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/18_paddle_red.png`,
+      fullPage: true,
+    });
+  });
+
   test("スタートボタン押下でゲームが開始し、ボールが移動を始める", async function ({ page }) {
     await page.goto(BASE_URL + PAGE_PATH);
     await page.locator("#startBtn").click();
