@@ -1,7 +1,9 @@
 name: Auto Issue Handler
 on:
+  issues:
+    types: [opened]          # Issue登録で即起動
   schedule:
-    - cron: '*/30 * * * *'  # 10分おき→30分おきに緩和し、過密トリガーを防ぐ
+    - cron: '*/15 * * * *'   # 取りこぼし救済用（30分→15分に短縮）
   workflow_dispatch:
 
 concurrency:
