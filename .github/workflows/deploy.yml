@@ -4,6 +4,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-main  # 同時に1回しかデプロイ・テストを実行しないようにする
+  cancel-in-progress: false  # 実行中のデプロイ・テストは最後まで完了させる
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
