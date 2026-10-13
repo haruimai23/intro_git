@@ -13,7 +13,7 @@ concurrency:
 jobs:
   handle-issues:
     runs-on: ubuntu-latest
-    timeout-minutes: 25  # 追加: 暴走・ハングしても最大25分で強制終了させる
+    timeout-minutes: 25  # 暴走・ハングしても最大25分で強制終了させる
     permissions:
       contents: write
       issues: write
@@ -106,31 +106,47 @@ jobs:
                   そのまま含めること（権限不足なのか、IDの指定誤りなのかを
                   後で判別できるようにするため）。
 
-            5. 対象Issueへの実際の対応を行う：
+            5. 作業用ブランチを作成する：
+               - ブランチ名は「issue-<issue番号>」とする（例: issue-45）。
+                 スラッシュを含む名前にはしないこと。
+               - git checkout -b issue-<issue番号> main
+                 で、mainから新しいブランチを作成する。
+               - 以降の作業（ファイル作成・修正）は、すべてこのブランチ上で行うこと。
+                 mainブランチには一切変更を加えないこと。
+
+            6. 対象Issueへの実際の対応を行う：
                - 新規作成の場合：プログラムファイルを作成する
                - 修正の場合：対象のプログラムファイルを特定し、Issueの内容に沿って修正する
                - テスト仕様書（test_xxx.md）を作成または更新する
                  （既存のテスト仕様書がある場合は、修正内容に応じて更新する）
                - テスト仕様書をもとにPlaywrightのテストファイル（test_xxx.spec.ts）を
                  作成または更新する（既存のテストファイルがあれば、それを更新する）
-               - BASE_URLはhttp://160.16.230.177を使用する
+                 ※このテストファイルの実行は、このワークフロー内では行わない。
+                 ブランチpush後、別のワークフロー（Deploy and Test）が自動的に
+                 ブランチ内容をデプロイした上でテストを実行する。
                - テストファイル内の各テストケースについて、主要な操作（初期表示直後、
                  ボタン押下後、状態変化後など）のタイミングでpage.screenshot()を用いて
                  スクリーンショットを保存すること
                - スクリーンショットの保存先はscreenshots/test_xxx/ ディレクトリとし、
                  ファイル名は連番と内容が分かる名前（例: 01_initial_view.png）とすること
                - fullPage: true を指定してページ全体をキャプチャすること
-               - git add, commit, push でmainブランチにPUSHする
-               - gh issue comment でIssueに完了コメントを投稿する
+               - git add, commit し、
+                 git push origin issue-<issue番号>
+                 で、作業用ブランチにPUSHする（mainにはpushしないこと）。
+
+            7. gh issue comment でIssueに完了コメントを投稿する。コメントには
+               以下を含めること：
+               - 対応内容の概要
+               - push先のブランチ名（issue-<issue番号>）
+               - ブランチの内容は「Deploy and Test」ワークフローが自動的に
+                 デプロイ・テストすること、進捗はActions画面で確認できる旨
+               - 検証用URL（例: http://160.16.230.177/branches/issue-<issue番号>/
+                 対象ファイル名）
                - Issueのcloseは行わないこと。対応が完了しても
                  Issueはopenのまま、Statusは「In Progress」の状態で止めておくこと。
-                 最終確認とcloseは人間が行うため、gh issue close は絶対に実行しないこと。
+                 最終確認・動作検証・mainへの反映（マージ）は人間が行うため、
+                 gh issue close やmainブランチへのマージは絶対に実行しないこと。
 
-            6. Statusが既に「In Progress」または「Done」になっているIssue、
+            8. Statusが既に「In Progress」または「Done」になっているIssue、
                あるいは既に完了コメントを投稿済みのIssueは、二重対応を避けるため
                対象から除外する（手順2の絞り込みに含める）。
-
-      - name: Trigger deploy workflow
-        run: gh workflow run deploy.yml --ref main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
