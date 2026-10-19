@@ -74,7 +74,7 @@ test.describe("ブロック崩し 1", function () {
     });
   });
 
-  test("パドル(ラケット)が灰色で表示される", async function ({ page }) {
+  test("パドル(ラケット)が黄色で表示される", async function ({ page }) {
     await page.goto(BASE_URL + PAGE_PATH);
     const pixel = await page.evaluate(() => {
       const canvas = document.getElementById("board") as HTMLCanvasElement;
@@ -82,13 +82,13 @@ test.describe("ブロック崩し 1", function () {
       const data = ctx.getImageData(240, 496, 1, 1).data;
       return { r: data[0], g: data[1], b: data[2] };
     });
-    expect(pixel.r).toBe(128);
-    expect(pixel.g).toBe(128);
-    expect(pixel.b).toBe(128);
+    expect(pixel.r).toBe(255);
+    expect(pixel.g).toBe(255);
+    expect(pixel.b).toBe(0);
 
     // パドル色確認のハードコピー
     await page.screenshot({
-      path: `${SCREENSHOT_DIR}/19_paddle_gray.png`,
+      path: `${SCREENSHOT_DIR}/19_paddle_yellow.png`,
       fullPage: true,
     });
   });
