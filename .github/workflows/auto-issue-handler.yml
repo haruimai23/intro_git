@@ -26,6 +26,7 @@ jobs:
       GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -61,52 +62,11 @@ jobs:
                1回の実行時間を短く保ち、後続のIssueがキューに埋もれて
                いつまでも処理されない事態を防ぐための重要な制約である。
 
-            4. 対応を開始する前に、そのIssueが紐づいているプロジェクト
-               （@haruimai23's project_1）のStatusフィールドを
-               「In Progress」に変更すること。判定・更新は必ず以下の
-               具体的な手順で行い、途中で「見つからない」場合でも
-               安易に「紐づいていない」と判断せず、必ずlimitを
-               十分大きく指定して再確認すること：
+               ※プロジェクトのStatus更新は、このワークフローの後続の
+               独立したステップが、作業用ブランチ名（issue-<番号>）から
+               Issue番号を読み取って別途行うため、ここでは一切行わない。
 
-               a. gh issue view <issue番号> --json id,number,title
-                  で対象Issueの内容を確認する
-
-               b. gh project list --owner haruimai23 --format json --limit 100
-                  で「project_1」というタイトルを含むプロジェクトを探し、
-                  そのプロジェクトのnumberとidを取得する
-                  （タイトルに「project_1」という文字列を含むものを対象とする）
-
-               c. gh project item-list <bで取得したproject番号> --owner haruimai23
-                  --format json --limit 200
-                  のように、必ず --limit 200 以上を指定して全アイテムを取得し、
-                  その中から content.number が対象Issueの番号と一致する
-                  アイテムを探し、そのアイテムのidを取得する。
-                  --limit を指定せずに実行した場合、デフォルトの取得件数制限により
-                  最近追加されたIssueが結果に含まれず、誤って「紐づいていない」と
-                  判断してしまうことがあるため、必ず --limit 200 以上を指定すること。
-
-               d. cで対象アイテムが見つかった場合：
-                  gh project field-list <project番号> --owner haruimai23 --format json
-                  で「Status」という名前のフィールドのidを取得し、
-                  そのフィールドのoptionsの中から名前が「In Progress」の
-                  オプションのidを取得する
-
-               e. 以下のコマンドでStatusを更新する：
-                  gh project item-edit --id <cで取得したアイテムID>
-                  --field-id <dで取得したStatusのフィールドID>
-                  --project-id <bで取得したプロジェクトID>
-                  --single-select-option-id <dで取得したIn ProgressのオプションID>
-
-               f. cの手順で --limit 200 を指定しても対象アイテムが
-                  本当に見つからなかった場合に限り、この手順をスキップし、
-                  その場合は完了コメントに「このIssueはプロジェクトに
-                  紐づいていなかったため、Statusの更新はスキップしました」
-                  と明記すること。また、item-editコマンドの実行時にエラーが
-                  出た場合は、そのエラーメッセージの内容を完了コメントに
-                  そのまま含めること（権限不足なのか、IDの指定誤りなのかを
-                  後で判別できるようにするため）。
-
-            5. 作業用ブランチを作成する：
+            4. 作業用ブランチを作成する：
                - ブランチ名は「issue-<issue番号>」とする（例: issue-45）。
                  スラッシュを含む名前にはしないこと。
                - git checkout -b issue-<issue番号> main
@@ -114,7 +74,7 @@ jobs:
                - 以降の作業（ファイル作成・修正）は、すべてこのブランチ上で行うこと。
                  mainブランチには一切変更を加えないこと。
 
-            6. 対象Issueへの実際の対応を行う：
+            5. 対象Issueへの実際の対応を行う：
                - 新規作成の場合：プログラムファイルを作成する
                - 修正の場合：対象のプログラムファイルを特定し、Issueの内容に沿って修正する
                - テスト仕様書（test_xxx.md）を作成または更新する
@@ -133,9 +93,12 @@ jobs:
                - git add, commit し、
                  git push origin issue-<issue番号>
                  で、作業用ブランチにPUSHする（mainにはpushしないこと）。
+               - push後も、作業用ブランチ（issue-<issue番号>）から他のブランチへ
+                 切り替えないこと（git checkout main 等を実行しないこと）。
+                 後続のステップが、現在のブランチ名からIssue番号を読み取るため。
 
-            6.5. 作成・修正したコードについて、セルフレビューを行うこと。
-               以下の観点で確認し、その結果を手順7の完了コメントに記載する：
+            5.5. 作成・修正したコードについて、セルフレビューを行うこと。
+               以下の観点で確認し、その結果を手順6の完了コメントに記載する：
                - 可読性（変数名・関数名が内容を表しているか、コメントは
                  適切か）
                - 既存コードとの一貫性（命名規則・インデント・スタイルが
@@ -150,7 +113,7 @@ jobs:
                ありません」等）。指摘内容を誇張したり、逆に問題を
                見つけたふりをして無理に指摘を作り出したりしないこと。
 
-            7. gh issue comment でIssueに完了コメントを投稿する。コメントには
+            6. gh issue comment でIssueに完了コメントを投稿する。コメントには
                以下を含めること：
                - 対応内容の概要
                - push先のブランチ名（issue-<issue番号>）
@@ -158,13 +121,100 @@ jobs:
                  デプロイ・テストすること、進捗はActions画面で確認できる旨
                - 検証用URL（例: http://160.16.230.177/branches/issue-<issue番号>/
                  対象ファイル名）
-               - 「## レビュー結果」という見出しを設け、手順6.5で行った
+               - 「## レビュー結果」という見出しを設け、手順5.5で行った
                  セルフレビューの内容をその下に記載すること
+               - プロジェクトのStatus更新については触れなくてよい
+                 （このワークフローの後続のステップが別途、更新結果を
+                 コメントとして追加する）
                - Issueのcloseは行わないこと。対応が完了しても
-                 Issueはopenのまま、Statusは「In Progress」の状態で止めておくこと。
+                 Issueはopenのままにしておくこと。
                  最終確認・動作検証・mainへの反映（マージ）は人間が行うため、
                  gh issue close やmainブランチへのマージは絶対に実行しないこと。
 
-            8. Statusが既に「In Progress」または「Done」になっているIssue、
+            7. Statusが既に「In Progress」または「Done」になっているIssue、
                あるいは既に完了コメントを投稿済みのIssueは、二重対応を避けるため
                対象から除外する（手順2の絞り込みに含める）。
+
+      # claude-code-action の内部では PROJECT_TOKEN が正しく使われず、
+      # gh project list が常に0件を返す問題があったため、プロジェクトの
+      # Status更新は claude-code-action の外側の、この独立したステップで
+      # 確実に PROJECT_TOKEN を使って行う。
+      #
+      # 対象Issue番号は、Claudeがチェックアウトした作業用ブランチ名
+      # （issue-<番号>）から取得する。Claudeにファイルを書かせる方式は、
+      # 許可リストに echo が無いためコマンドが拒否され、番号が渡らない
+      # 可能性があったため廃止した。
+      - name: 対象Issue番号を読み取る
+        id: target_issue
+        if: always()
+        run: |
+          BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+          echo "現在のブランチ: $BRANCH"
+          if [[ "$BRANCH" =~ ^issue-([0-9]+)$ ]]; then
+            NUM="${BASH_REMATCH[1]}"
+          else
+            NUM="none"
+          fi
+          # 数字以外は受け付けない（想定外の値がシェルに渡るのを防ぐ）
+          [[ "$NUM" =~ ^[0-9]+$ ]] || NUM="none"
+          echo "対象Issue番号: $NUM"
+          echo "number=$NUM" >> "$GITHUB_OUTPUT"
+
+      - name: プロジェクトのStatusをIn Progressに更新する
+        if: always() && steps.target_issue.outputs.number != 'none' && steps.target_issue.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.target_issue.outputs.number }}
+          OWNER: haruimai23
+          # プロジェクト番号（URL github.com/users/haruimai23/projects/3 の末尾）
+          # タイトル（@haruimai23's project_1）で探すと表記ゆれに弱いため番号で指定する
+          PROJECT_NUMBER: "3"
+          PROJECT_TITLE: project_1
+        run: |
+          set -e
+
+          echo "対象Issue番号: $ISSUE_NUMBER"
+
+          PROJECT_ID=$(gh project view "$PROJECT_NUMBER" --owner "$OWNER" --format json --jq '.id' 2>&1) || PROJECT_ID=""
+
+          if [ -z "$PROJECT_ID" ] || [[ "$PROJECT_ID" != PVT_* ]]; then
+            echo "プロジェクト（番号 $PROJECT_NUMBER）が取得できませんでした: $PROJECT_ID"
+            gh issue comment "$ISSUE_NUMBER" --body "## プロジェクトStatus更新について
+          $PROJECT_TITLE（プロジェクト番号 $PROJECT_NUMBER）を取得できなかったため、Statusの更新はスキップしました。PROJECT_TOKENの権限（project スコープ）をご確認ください。"
+            exit 0
+          fi
+
+          echo "project番号: $PROJECT_NUMBER / projectID: $PROJECT_ID"
+
+          ITEM_JSON=$(gh project item-list "$PROJECT_NUMBER" --owner "$OWNER" --format json --limit 200)
+          ITEM_ID=$(echo "$ITEM_JSON" | jq -r --arg n "$ISSUE_NUMBER" '.items[] | select(.content.number == ($n|tonumber)) | .id' | head -n1)
+
+          if [ -z "$ITEM_ID" ]; then
+            echo "対象Issueに対応するプロジェクトアイテムが見つかりませんでした。"
+            gh issue comment "$ISSUE_NUMBER" --body "## プロジェクトStatus更新について
+          このIssueはプロジェクト（$PROJECT_TITLE）に紐づいていなかったため、Statusの更新はスキップしました。"
+            exit 0
+          fi
+
+          echo "アイテムID: $ITEM_ID"
+
+          FIELD_JSON=$(gh project field-list "$PROJECT_NUMBER" --owner "$OWNER" --format json)
+          FIELD_ID=$(echo "$FIELD_JSON" | jq -r '.fields[] | select(.name == "Status") | .id')
+          OPTION_ID=$(echo "$FIELD_JSON" | jq -r '.fields[] | select(.name == "Status") | .options[] | select(.name == "In Progress") | .id')
+
+          if [ -z "$FIELD_ID" ] || [ -z "$OPTION_ID" ]; then
+            echo "StatusフィールドまたはIn Progressオプションが見つかりませんでした。"
+            gh issue comment "$ISSUE_NUMBER" --body "## プロジェクトStatus更新について
+          StatusフィールドまたはIn Progressオプションが見つからなかったため、Statusの更新に失敗しました。"
+            exit 0
+          fi
+
+          if gh project item-edit --id "$ITEM_ID" --field-id "$FIELD_ID" --project-id "$PROJECT_ID" --single-select-option-id "$OPTION_ID"; then
+            echo "Statusの更新に成功しました。"
+            gh issue comment "$ISSUE_NUMBER" --body "## プロジェクトStatus更新について
+          $PROJECT_TITLE のStatusを「In Progress」に更新しました。"
+          else
+            echo "Statusの更新に失敗しました。"
+            gh issue comment "$ISSUE_NUMBER" --body "## プロジェクトStatus更新について
+          Statusの更新コマンド（gh project item-edit）の実行に失敗しました。PROJECT_TOKENの権限（project スコープ）をご確認ください。"
+          fi
