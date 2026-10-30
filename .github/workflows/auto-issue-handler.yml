@@ -3,11 +3,14 @@ on:
   issues:
     types: [opened]          # Issue登録で即起動
   schedule:
-    - cron: '*/15 * * * *'   # 取りこぼし救済用（30分→15分に短縮）
+    - cron: '*/15 * * * *'   # 取りこぼし救済用
   workflow_dispatch:
 
+# 並列実行の制御：
+# - Issue登録で起動した実行は Issue番号ごとに別グループ → 複数Issueを並列に処理する
+# - 定期実行・手動実行（取りこぼし救済）は "rescue" グループで1本ずつ処理する
 concurrency:
-  group: auto-issue-handler
+  group: auto-issue-handler-${{ github.event_name == 'issues' && format('issue-{0}', github.event.issue.number) || 'rescue' }}
   cancel-in-progress: false
 
 jobs:
@@ -24,10 +27,55 @@ jobs:
       # project スコープ付きのPAT（Settings > Secrets and variables > Actions に
       # PROJECT_TOKEN という名前で登録してください）
       GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+      # 対応中・対応済みの目印として付けるラベル（並列実行時の二重対応防止用）
+      HANDLED_LABEL: claude-handled
     steps:
       - uses: actions/checkout@v4
 
+      # 対象Issueを Claude ではなくワークフロー側で決める。
+      # 並列実行時に複数の実行が同じIssueを選んでしまうのを防ぐため。
+      - name: 対象Issueを決める
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -e
+          if [ "$EVENT_NAME" = "issues" ]; then
+            # Issue登録で起動した場合：登録されたIssueそのものが対象
+            NUM="$EVENT_ISSUE_NUMBER"
+          else
+            # 定期実行・手動実行の場合：取りこぼされたIssueを1件だけ拾う
+            # 条件：openで、目印ラベルが無く、完了コメント（## レビュー結果）も無く、
+            #       登録から10分以上経過しているもの（登録直後の即時実行と重ならないように）
+            NUM=$(gh issue list --state open --limit 100 \
+              --json number,createdAt,labels,comments \
+              --jq '[ .[]
+                      | select((.labels | map(.name) | index(env.HANDLED_LABEL)) | not)
+                      | select(([.comments[].body | contains("## レビュー結果")] | any) | not)
+                      | select((now - (.createdAt | fromdateiso8601)) > 600)
+                    ]
+                    | sort_by(.createdAt) | .[0].number // "none"')
+          fi
+          # 数字以外は受け付けない
+          [[ "$NUM" =~ ^[0-9]+$ ]] || NUM="none"
+          echo "対象Issue番号: $NUM"
+          echo "number=$NUM" >> "$GITHUB_OUTPUT"
+
+      # 目印ラベルを付ける（以降、救済用の定期実行がこのIssueを拾わなくなる）
+      - name: 対応中ラベルを付ける
+        if: steps.target.outputs.number != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.target.outputs.number }}
+        run: |
+          gh label create "$HANDLED_LABEL" --color 5319E7 \
+            --description "Claudeが対応中または対応済み" --force
+          gh issue edit "$ISSUE_NUMBER" --add-label "$HANDLED_LABEL"
+
       - uses: anthropics/claude-code-action@v1
+        if: steps.target.outputs.number != 'none'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           show_full_output: true
@@ -45,36 +93,29 @@ jobs:
           prompt: |
             以下の手順を実行してください：
 
-            1. gh issue list --state open --json number,title,body,createdAt
-               でIssue一覧を取得する
+            1. 今回の対象は Issue #${{ steps.target.outputs.number }} の1件のみである。
+               gh issue view ${{ steps.target.outputs.number }} --json number,title,body
+               で内容を確認する。
+               他のIssueには一切手を付けないこと（他のIssueは別の実行が並列に
+               処理している可能性があるため）。
 
-            2. 取得したIssueの中から、Statusが未着手（Todo等。「In Progress」
-               または「Done」ではなく、かつ既に完了コメントも投稿されていない）
-               のものだけを対象に、createdAt（作成日時）が古い順に並べ替える。
-
-            3. 並べ替えた結果の**先頭の1件（最も古い未着手Issue）だけ**を
-               今回の対象とする。対象が「プログラムを新規作成する依頼」または
+            2. 対象が「プログラムを新規作成する依頼」または
                「既存プログラムの修正・不具合対応を依頼する内容」でなければ、
-               何もせず終了する（対象IssueがなければそこでOK、正常終了とする）。
-
-               ※1回の実行につき処理するIssueは必ず1件のみとすること。
-               複数のIssueをまとめて処理しようとしないこと。これは、
-               1回の実行時間を短く保ち、後続のIssueがキューに埋もれて
-               いつまでも処理されない事態を防ぐための重要な制約である。
+               何もせず終了する（正常終了とする）。
 
                ※プロジェクトのStatus更新は、このワークフローの後続の
                独立したステップが、作業用ブランチ名（issue-<番号>）から
                Issue番号を読み取って別途行うため、ここでは一切行わない。
 
-            4. 作業用ブランチを作成する：
-               - ブランチ名は「issue-<issue番号>」とする（例: issue-45）。
+            3. 作業用ブランチを作成する：
+               - ブランチ名は「issue-${{ steps.target.outputs.number }}」とする。
                  スラッシュを含む名前にはしないこと。
-               - git checkout -b issue-<issue番号> main
+               - git checkout -b issue-${{ steps.target.outputs.number }} main
                  で、mainから新しいブランチを作成する。
                - 以降の作業（ファイル作成・修正）は、すべてこのブランチ上で行うこと。
                  mainブランチには一切変更を加えないこと。
 
-            5. 対象Issueへの実際の対応を行う：
+            4. 対象Issueへの実際の対応を行う：
                - 新規作成の場合：プログラムファイルを作成する
                - 修正の場合：対象のプログラムファイルを特定し、Issueの内容に沿って修正する
                - テスト仕様書（test_xxx.md）を作成または更新する
@@ -91,14 +132,14 @@ jobs:
                  ファイル名は連番と内容が分かる名前（例: 01_initial_view.png）とすること
                - fullPage: true を指定してページ全体をキャプチャすること
                - git add, commit し、
-                 git push origin issue-<issue番号>
+                 git push origin issue-${{ steps.target.outputs.number }}
                  で、作業用ブランチにPUSHする（mainにはpushしないこと）。
-               - push後も、作業用ブランチ（issue-<issue番号>）から他のブランチへ
+               - push後も、作業用ブランチから他のブランチへ
                  切り替えないこと（git checkout main 等を実行しないこと）。
                  後続のステップが、現在のブランチ名からIssue番号を読み取るため。
 
-            5.5. 作成・修正したコードについて、セルフレビューを行うこと。
-               以下の観点で確認し、その結果を手順6の完了コメントに記載する：
+            4.5. 作成・修正したコードについて、セルフレビューを行うこと。
+               以下の観点で確認し、その結果を手順5の完了コメントに記載する：
                - 可読性（変数名・関数名が内容を表しているか、コメントは
                  適切か）
                - 既存コードとの一貫性（命名規則・インデント・スタイルが
@@ -113,15 +154,15 @@ jobs:
                ありません」等）。指摘内容を誇張したり、逆に問題を
                見つけたふりをして無理に指摘を作り出したりしないこと。
 
-            6. gh issue comment でIssueに完了コメントを投稿する。コメントには
+            5. gh issue comment でIssueに完了コメントを投稿する。コメントには
                以下を含めること：
                - 対応内容の概要
-               - push先のブランチ名（issue-<issue番号>）
+               - push先のブランチ名（issue-${{ steps.target.outputs.number }}）
                - ブランチの内容は「Deploy and Test」ワークフローが自動的に
                  デプロイ・テストすること、進捗はActions画面で確認できる旨
-               - 検証用URL（例: http://160.16.230.177/branches/issue-<issue番号>/
+               - 検証用URL（例: http://160.16.230.177/branches/issue-${{ steps.target.outputs.number }}/
                  対象ファイル名）
-               - 「## レビュー結果」という見出しを設け、手順5.5で行った
+               - 「## レビュー結果」という見出しを設け、手順4.5で行った
                  セルフレビューの内容をその下に記載すること
                - プロジェクトのStatus更新については触れなくてよい
                  （このワークフローの後続のステップが別途、更新結果を
@@ -131,32 +172,26 @@ jobs:
                  最終確認・動作検証・mainへの反映（マージ）は人間が行うため、
                  gh issue close やmainブランチへのマージは絶対に実行しないこと。
 
-            7. Statusが既に「In Progress」または「Done」になっているIssue、
-               あるいは既に完了コメントを投稿済みのIssueは、二重対応を避けるため
-               対象から除外する（手順2の絞り込みに含める）。
-
       # claude-code-action の内部では PROJECT_TOKEN が正しく使われず、
       # gh project list が常に0件を返す問題があったため、プロジェクトの
       # Status更新は claude-code-action の外側の、この独立したステップで
       # 確実に PROJECT_TOKEN を使って行う。
       #
-      # 対象Issue番号は、Claudeがチェックアウトした作業用ブランチ名
-      # （issue-<番号>）から取得する。Claudeにファイルを書かせる方式は、
-      # 許可リストに echo が無いためコマンドが拒否され、番号が渡らない
-      # 可能性があったため廃止した。
+      # 作業用ブランチ（issue-<番号>）が作られている場合だけ更新する
+      # （Claudeが「プログラム作成・修正の依頼ではない」と判断した場合は更新しない）。
       - name: 対象Issue番号を読み取る
         id: target_issue
         if: always()
+        env:
+          EXPECTED: ${{ steps.target.outputs.number }}
         run: |
           BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
           echo "現在のブランチ: $BRANCH"
-          if [[ "$BRANCH" =~ ^issue-([0-9]+)$ ]]; then
+          if [[ "$BRANCH" =~ ^issue-([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" = "$EXPECTED" ]; then
             NUM="${BASH_REMATCH[1]}"
           else
             NUM="none"
           fi
-          # 数字以外は受け付けない（想定外の値がシェルに渡るのを防ぐ）
-          [[ "$NUM" =~ ^[0-9]+$ ]] || NUM="none"
           echo "対象Issue番号: $NUM"
           echo "number=$NUM" >> "$GITHUB_OUTPUT"
 
