@@ -17,7 +17,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     outputs:
-      base_url: ${{ steps.set_url.outputs.base_url }}
+      # base_url はサーバーのアドレス（Secret の SERVER_HOST と同じ値）を含むため、
+      # GitHub に「秘密情報かもしれない」と判断されて test ジョブへ渡らない。
+      # そのため base_url ではなく、秘密情報を含まないブランチ名だけを渡す。
+      branch: ${{ steps.branch.outputs.branch }}
     steps:
       - name: 対象ブランチを決定
         id: branch
@@ -56,21 +59,33 @@ jobs:
               git clone --branch "$BRANCH" --single-branch https://github.com/haruimai23/intro_git.git "$BRANCH"
             fi
 
-      - name: BASE_URLを決定
-        id: set_url
-        run: |
-          BRANCH="${{ steps.branch.outputs.branch }}"
-          if [ "$BRANCH" = "main" ]; then
-            echo "base_url=http://160.16.230.177" >> "$GITHUB_OUTPUT"
-          else
-            echo "base_url=http://160.16.230.177/branches/$BRANCH" >> "$GITHUB_OUTPUT"
-          fi
-
   test:
     needs: deploy
     runs-on: ubuntu-latest
     steps:
+      # テストファイルもデプロイ対象と同じブランチのものを使う
+      # （手動実行でブランチを指定した場合にも対応）
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.deploy.outputs.branch }}
+
+      # BASE_URL は test ジョブの中で組み立てる（ジョブ間で受け渡すと捨てられるため）
+      - name: BASE_URLを決定
+        env:
+          BRANCH: ${{ needs.deploy.outputs.branch }}
+        run: |
+          if [ -z "$BRANCH" ]; then
+            echo "ブランチ名が取得できませんでした。" >&2
+            exit 1
+          fi
+          if [ "$BRANCH" = "main" ]; then
+            BASE_URL="http://160.16.230.177"
+          else
+            BASE_URL="http://160.16.230.177/branches/$BRANCH"
+          fi
+          echo "テスト対象: $BASE_URL"
+          echo "BASE_URL=$BASE_URL" >> "$GITHUB_ENV"
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
@@ -79,9 +94,7 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
       - name: Run Playwright tests
-        run: npx playwright test --reporter=html
-        env:
-          BASE_URL: ${{ needs.deploy.outputs.base_url }}
+        run: npx playwright test --reporter=html  # BASE_URL は前のステップで環境変数に設定済み
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
