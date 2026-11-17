@@ -1,9 +1,9 @@
 import { test, expect, Page } from "@playwright/test";
 
 const BASE_URL = process.env.BASE_URL || "http://160.16.230.177";
-const BRANCH_NAME = process.env.BRANCH_NAME || "issue-71";
-const PAGE_PATH = BRANCH_NAME === "main" ? "/index_task_db.php" : `/branches/${BRANCH_NAME}/index_task_db.php`;
-const TARGET_URL = BASE_URL + PAGE_PATH;
+// BASE_URL は、ブランチの場合 http://.../branches/<ブランチ名> の形になる
+const BRANCH_NAME = (BASE_URL.match(/\/branches\/([^/]+)/) || [])[1] || "main";
+const TARGET_URL = BASE_URL + "/index_task_db.php";
 const API_LIST_URL = TARGET_URL + "?api=list";
 const API_DELETE_URL = TARGET_URL + "?api=delete";
 
